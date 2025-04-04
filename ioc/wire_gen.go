@@ -26,6 +26,7 @@ import (
 	baguwen "github.com/ecodeclub/webook/internal/question"
 	"github.com/ecodeclub/webook/internal/recon"
 	"github.com/ecodeclub/webook/internal/resume"
+	"github.com/ecodeclub/webook/internal/review"
 	"github.com/ecodeclub/webook/internal/roadmap"
 	"github.com/ecodeclub/webook/internal/search"
 	"github.com/ecodeclub/webook/internal/skill"
@@ -61,11 +62,11 @@ func InitApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	aiModule, err := ai.InitModule(db, creditModule)
+	aiModule, err := ai.InitModule(db, creditModule, mq)
 	if err != nil {
 		return nil, err
 	}
-	baguwenModule, err := baguwen.InitModule(db, interactiveModule, cache, permissionModule, aiModule, mq)
+	baguwenModule, err := baguwen.InitModule(db, interactiveModule, cache, permissionModule, aiModule, module, provider, mq)
 	if err != nil {
 		return nil, err
 	}
@@ -73,10 +74,11 @@ func InitApp() (*App, error) {
 	examineHandler := baguwenModule.ExamineHdl
 	questionSetHandler := baguwenModule.QsHdl
 	webHandler := label.InitHandler(db)
-	handler2 := InitUserHandler(db, cache, mq, module, permissionModule)
+	userModule := InitUserModule(db, provider, cache, mq, module, permissionModule)
+	handler2 := userModule.Hdl
 	config := InitCosConfig()
 	handler3 := cos.InitHandler(config)
-	casesModule, err := cases.InitModule(db, interactiveModule, aiModule, mq)
+	casesModule, err := cases.InitModule(db, interactiveModule, aiModule, module, provider, cache, mq)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +96,7 @@ func InitApp() (*App, error) {
 		return nil, err
 	}
 	handler7 := productModule.Hdl
-	paymentModule, err := payment.InitModule(db, mq, cache, creditModule)
+	paymentModule, err := payment.InitModule(db, mq, cache, userModule, creditModule)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +105,7 @@ func InitApp() (*App, error) {
 		return nil, err
 	}
 	handler8 := orderModule.Hdl
-	projectModule, err := project.InitModule(db, interactiveModule, permissionModule, mq)
+	projectModule, err := project.InitModule(db, interactiveModule, permissionModule, mq, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +137,9 @@ func InitApp() (*App, error) {
 	projectHandler := resumeModule.PrjHdl
 	analysisHandler := resumeModule.AnalysisHandler
 	handler17 := aiModule.Hdl
-	component := initGinxServer(provider, checkMembershipMiddlewareBuilder, localActiveLimit, checkPermissionMiddlewareBuilder, handler, examineHandler, questionSetHandler, webHandler, handler2, handler3, handler4, handler5, handler6, handler7, handler8, handler9, handler10, handler11, handler12, handler13, handler14, handler15, handler16, caseSetHandler, webExamineHandler, projectHandler, analysisHandler, handler17)
+	reviewModule := review.InitModule(db, interactiveModule, mq, provider, cache)
+	handler18 := reviewModule.Hdl
+	component := initGinxServer(provider, checkMembershipMiddlewareBuilder, localActiveLimit, checkPermissionMiddlewareBuilder, handler, examineHandler, questionSetHandler, webHandler, handler2, handler3, handler4, handler5, handler6, handler7, handler8, handler9, handler10, handler11, handler12, handler13, handler14, handler15, handler16, caseSetHandler, webExamineHandler, projectHandler, analysisHandler, handler17, handler18)
 	adminHandler := projectModule.AdminHdl
 	webAdminHandler := roadmapModule.AdminHdl
 	adminHandler2 := baguwenModule.AdminHdl
@@ -144,7 +148,10 @@ func InitApp() (*App, error) {
 	adminCaseSetHandler := casesModule.AdminSetHandler
 	adminHandler3 := marketingModule.AdminHdl
 	adminHandler4 := aiModule.AdminHandler
-	adminServer := InitAdminServer(adminHandler, webAdminHandler, adminHandler2, adminQuestionSetHandler, adminCaseHandler, adminCaseSetHandler, adminHandler3, adminHandler4)
+	adminHandler5 := reviewModule.AdminHdl
+	knowledgeBaseHandler := casesModule.KnowledgeBaseHandler
+	webKnowledgeBaseHandler := baguwenModule.KnowledgeBaseHdl
+	adminServer := InitAdminServer(adminHandler, webAdminHandler, adminHandler2, adminQuestionSetHandler, adminCaseHandler, adminCaseSetHandler, adminHandler3, adminHandler4, adminHandler5, knowledgeBaseHandler, webKnowledgeBaseHandler)
 	closeTimeoutOrdersJob := orderModule.CloseTimeoutOrdersJob
 	closeTimeoutLockedCreditsJob := creditModule.CloseTimeoutLockedCreditsJob
 	syncWechatOrderJob := paymentModule.SyncWechatOrderJob

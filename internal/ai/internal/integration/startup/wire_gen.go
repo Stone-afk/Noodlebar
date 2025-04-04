@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/ecodeclub/webook/internal/ai"
+	"github.com/ecodeclub/webook/internal/ai/internal/event"
 	"github.com/ecodeclub/webook/internal/ai/internal/repository"
 	"github.com/ecodeclub/webook/internal/ai/internal/repository/dao"
 	"github.com/ecodeclub/webook/internal/ai/internal/service"
@@ -20,6 +21,9 @@ import (
 	"github.com/ecodeclub/webook/internal/ai/internal/service/llm/handler/log"
 	hdlmocks "github.com/ecodeclub/webook/internal/ai/internal/service/llm/handler/mocks"
 	"github.com/ecodeclub/webook/internal/ai/internal/service/llm/handler/record"
+	hdlmocks2 "github.com/ecodeclub/webook/internal/ai/internal/service/llm/handler/stream_mocks"
+	"github.com/ecodeclub/webook/internal/ai/internal/service/llm/knowledge_base"
+	"github.com/ecodeclub/webook/internal/ai/internal/service/llm/knowledge_base/zhipu"
 	"github.com/ecodeclub/webook/internal/ai/internal/web"
 	"github.com/ecodeclub/webook/internal/credit"
 	"github.com/ego-component/egorm"
@@ -28,7 +32,7 @@ import (
 
 // Injectors from wire.go:
 
-func InitModule(db *gorm.DB, hdl *hdlmocks.MockHandler, creditSvc *credit.Module) (*ai.Module, error) {
+func InitModule(db *gorm.DB, hdl *hdlmocks.MockHandler, streamHandler *hdlmocks2.MockStreamHandler, baseSvc knowledge_base.RepositoryBaseSvc, creditSvc *credit.Module, consumer *event.KnowledgeBaseConsumer) (*ai.Module, error) {
 	handlerBuilder := log.NewHandler()
 	configDAO := dao.NewGORMConfigDAO(db)
 	configRepository := repository.NewCachedConfigRepository(configDAO)
@@ -42,24 +46,42 @@ func InitModule(db *gorm.DB, hdl *hdlmocks.MockHandler, creditSvc *credit.Module
 	recordHandlerBuilder := record.NewHandler(llmLogRepo)
 	v := ai.InitCommonHandlers(handlerBuilder, configHandlerBuilder, creditHandlerBuilder, recordHandlerBuilder)
 	handler := InitRootHandler(v, hdl)
-	llmService := llm.NewLLMService(handler)
+	handlerStreamHandler := InitStreamHandler(streamHandler)
+	llmService := llm.NewLLMService(handler, handlerStreamHandler)
 	generalService := service.NewGeneralService(llmService)
 	jdService := service.NewJDService(llmService)
 	webHandler := web.NewHandler(generalService, jdService)
 	configService := service.NewConfigService(configRepository)
 	adminHandler := web.NewAdminHandler(configService)
 	module := &ai.Module{
-		Svc:          llmService,
-		Hdl:          webHandler,
-		AdminHandler: adminHandler,
+		Svc:              llmService,
+		KnowledgeBaseSvc: baseSvc,
+		Hdl:              webHandler,
+		AdminHandler:     adminHandler,
+		C:                consumer,
 	}
 	return module, nil
 }
 
 // wire.go:
 
+func InitKnowledgeBaseSvc(db *egorm.Component, apikey string) knowledge_base.RepositoryBaseSvc {
+	knowledgeDao := dao.NewKnowledgeBaseDAO(db)
+	knowledgeRepo := repository.NewKnowledgeBaseRepo(knowledgeDao)
+
+	knowledgeSvc, err := zhipu.NewKnowledgeBase(apikey, knowledgeRepo)
+	if err != nil {
+		panic(err)
+	}
+	return knowledgeSvc
+}
+
 func InitRootHandler(common []handler.Builder, hdl *hdlmocks.MockHandler) handler.Handler {
 	return handler.NewCompositionHandler(common, hdl)
+}
+
+func InitStreamHandler(streamHdl *hdlmocks2.MockStreamHandler) handler.StreamHandler {
+	return streamHdl
 }
 
 var daoOnce = sync.Once{}

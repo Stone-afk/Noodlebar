@@ -23,7 +23,7 @@ type LLMRequest struct {
 	prompt string
 }
 
-func (req LLMRequest) Prompt() string {
+func (req *LLMRequest) Prompt() string {
 	if req.prompt == "" {
 		args := slice.Map(req.Input, func(idx int, src string) any {
 			return src
@@ -65,6 +65,7 @@ type BizConfig struct {
 	// 这里一般使用 %s
 	// 后续考虑 key value 的形式
 	PromptTemplate string
+	Utime          int64
 }
 
 type LLMCredit struct {
@@ -118,3 +119,13 @@ const (
 	RecordStatusSuccess    RecordStatus = 1
 	RecordStatusFailed     RecordStatus = 2
 )
+
+type StreamEvent struct {
+	// 内容
+	Content          string
+	ReasoningContent string
+	// 错误
+	Error error
+	// 是否结束
+	Done bool
+}

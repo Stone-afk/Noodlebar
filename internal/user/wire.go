@@ -18,6 +18,7 @@ package user
 
 import (
 	"github.com/ecodeclub/ecache"
+	"github.com/ecodeclub/ginx/session"
 	"github.com/ecodeclub/mq-api"
 	"github.com/ecodeclub/webook/internal/member"
 	"github.com/ecodeclub/webook/internal/permission"
@@ -38,15 +39,17 @@ var ProviderSet = wire.NewSet(
 	service.NewUserService,
 	repository.NewCachedUserRepository)
 
-func InitHandler(db *egorm.Component,
+func InitModule(db *egorm.Component,
 	cache ecache.Cache,
 	q mq.MQ, creators []string,
 	memberSvc *member.Module,
-	permissionSvc *permission.Module) *Handler {
+	sp session.Provider,
+	permissionSvc *permission.Module) *Module {
 	wire.Build(
 		ProviderSet,
 		wire.FieldsOf(new(*member.Module), "Svc"),
 		wire.FieldsOf(new(*permission.Module), "Svc"),
+		wire.Struct(new(Module), "*"),
 	)
-	return new(Handler)
+	return new(Module)
 }

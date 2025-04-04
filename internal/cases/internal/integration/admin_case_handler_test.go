@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ecodeclub/webook/internal/member"
+
 	"github.com/ecodeclub/ginx/session"
 	"github.com/ecodeclub/webook/internal/ai"
 	"github.com/gin-gonic/gin"
@@ -54,12 +56,13 @@ import (
 
 type AdminCaseHandlerTestSuite struct {
 	suite.Suite
-	server   *egin.Component
-	db       *egorm.Component
-	rdb      ecache.Cache
-	dao      dao.CaseDAO
-	ctrl     *gomock.Controller
-	producer *eveMocks.MockSyncEventProducer
+	server                *egin.Component
+	db                    *egorm.Component
+	rdb                   ecache.Cache
+	dao                   dao.CaseDAO
+	ctrl                  *gomock.Controller
+	producer              *eveMocks.MockSyncEventProducer
+	knowledgeBaseProducer *eveMocks.MockKnowledgeBaseEventProducer
 }
 
 func (s *AdminCaseHandlerTestSuite) TearDownTest() {
@@ -72,9 +75,12 @@ func (s *AdminCaseHandlerTestSuite) TearDownTest() {
 func (s *AdminCaseHandlerTestSuite) SetupSuite() {
 	s.ctrl = gomock.NewController(s.T())
 	s.producer = eveMocks.NewMockSyncEventProducer(s.ctrl)
+	s.knowledgeBaseProducer = eveMocks.NewMockKnowledgeBaseEventProducer(s.ctrl)
 	intrModule := &interactive.Module{}
 
-	module, err := startup.InitModule(s.producer, &ai.Module{}, intrModule)
+	module, err := startup.InitModule(s.producer,
+		s.knowledgeBaseProducer, &ai.Module{},
+		&member.Module{}, session.DefaultProvider(), intrModule)
 	require.NoError(s.T(), err)
 	handler := module.AdminHandler
 	econf.Set("server", map[string]any{"contextTimeout": "1s"})
@@ -435,6 +441,9 @@ func (s *AdminCaseHandlerTestSuite) TestPublish() {
 				s.producer.EXPECT().Produce(gomock.Any(), gomock.Any()).
 					MaxTimes(1).
 					Return(nil)
+				s.knowledgeBaseProducer.EXPECT().Produce(gomock.Any(), gomock.Any()).
+					MaxTimes(1).
+					Return(nil)
 			},
 			after: func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -465,6 +474,37 @@ func (s *AdminCaseHandlerTestSuite) TestPublish() {
 				publishCase, err := s.dao.GetPublishCase(ctx, 1)
 				require.NoError(t, err)
 				s.assertCase(t, wantCase, dao.Case(publishCase))
+				s.cacheAssertCase(domain.Case{
+					Id:           1,
+					Uid:          uid,
+					Title:        "案例1",
+					Content:      "案例1内容",
+					Introduction: "案例1介绍",
+					Labels: []string{
+						"MySQL",
+					},
+					Status:     domain.PublishedStatus,
+					GithubRepo: "www.github.com",
+					GiteeRepo:  "www.gitee.com",
+					Keywords:   "mysql_keywords",
+					Shorthand:  "mysql_shorthand",
+					Highlight:  "mysql_highlight",
+					Guidance:   "mysql_guidance",
+					Biz:        "case",
+					BizId:      11,
+				})
+				s.cacheAssertCaseList("case", []domain.Case{
+					{
+						Id:           1,
+						Title:        "案例1",
+						Introduction: "案例1介绍",
+						Labels: []string{
+							"MySQL",
+						},
+						Status: domain.PublishedStatus,
+					},
+				})
+
 			},
 			req: web.SaveReq{
 				Case: web.Case{
@@ -494,6 +534,9 @@ func (s *AdminCaseHandlerTestSuite) TestPublish() {
 				s.producer.EXPECT().Produce(gomock.Any(), gomock.Any()).
 					MaxTimes(1).
 					Return(nil)
+				s.knowledgeBaseProducer.EXPECT().Produce(gomock.Any(), gomock.Any()).
+					MaxTimes(1).
+					Return(nil)
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 				defer cancel()
 				err := s.db.WithContext(ctx).Create(&dao.Case{
@@ -512,11 +555,25 @@ func (s *AdminCaseHandlerTestSuite) TestPublish() {
 					Shorthand:  "old_mysql_shorthand",
 					Highlight:  "old_mysql_highlight",
 					Guidance:   "old_mysql_guidance",
-					Biz:        "case",
+					Biz:        "question",
 					BizId:      11,
 					Ctime:      123,
 					Utime:      234,
 				}).Error
+				require.NoError(t, err)
+				cs := []domain.Case{
+					{
+						Id:           2,
+						Title:        "老的案例标题",
+						Content:      "老的案例内容",
+						Introduction: "老的案例介绍",
+						Labels:       []string{"old-MySQL"},
+						Status:       domain.PublishedStatus,
+					},
+				}
+				csByte, err := json.Marshal(cs)
+				require.NoError(t, err)
+				err = s.rdb.Set(ctx, "cases:list:question", string(csByte), 24*time.Hour)
 				require.NoError(t, err)
 			},
 			after: func(t *testing.T) {
@@ -548,6 +605,36 @@ func (s *AdminCaseHandlerTestSuite) TestPublish() {
 				require.NoError(t, err)
 				publishCase.Ctime = 123
 				s.assertCase(t, wantCase, dao.Case(publishCase))
+				s.cacheAssertCase(domain.Case{
+					Id:           2,
+					Uid:          uid,
+					Title:        "案例2",
+					Content:      "案例2内容",
+					Introduction: "案例2介绍",
+					Labels: []string{
+						"MySQL",
+					},
+					Status:     domain.PublishedStatus,
+					GithubRepo: "www.github.com",
+					GiteeRepo:  "www.gitee.com",
+					Keywords:   "mysql_keywords",
+					Shorthand:  "mysql_shorthand",
+					Highlight:  "mysql_highlight",
+					Guidance:   "mysql_guidance",
+					Biz:        "question",
+					BizId:      12,
+				})
+				s.cacheAssertCaseList("question", []domain.Case{
+					{
+						Id:           2,
+						Title:        "案例2",
+						Introduction: "案例2介绍",
+						Labels: []string{
+							"MySQL",
+						},
+						Status: domain.PublishedStatus,
+					},
+				})
 			},
 			req: web.SaveReq{
 				Case: web.Case{
@@ -578,6 +665,9 @@ func (s *AdminCaseHandlerTestSuite) TestPublish() {
 				s.producer.EXPECT().Produce(gomock.Any(), gomock.Any()).
 					MaxTimes(1).
 					Return(nil)
+				s.knowledgeBaseProducer.EXPECT().Produce(gomock.Any(), gomock.Any()).
+					MaxTimes(1).
+					Return(nil)
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 				defer cancel()
 				oldCase := dao.Case{
@@ -606,6 +696,7 @@ func (s *AdminCaseHandlerTestSuite) TestPublish() {
 				pubCase := dao.PublishCase(oldCase)
 				err = s.db.WithContext(ctx).Create(pubCase).Error
 				require.NoError(t, err)
+
 			},
 			after: func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -636,6 +727,23 @@ func (s *AdminCaseHandlerTestSuite) TestPublish() {
 				require.NoError(t, err)
 				publishCase.Ctime = 123
 				s.assertCase(t, wantCase, dao.Case(publishCase))
+				s.cacheAssertCase(domain.Case{
+					Id:           3,
+					Uid:          uid,
+					Title:        "案例2",
+					Content:      "案例2内容",
+					Introduction: "案例2介绍",
+					Labels:       []string{"MySQL"},
+					Status:       domain.PublishedStatus,
+					GithubRepo:   "www.github.com",
+					GiteeRepo:    "www.gitee.com",
+					Keywords:     "mysql_keywords",
+					Shorthand:    "mysql_shorthand",
+					Highlight:    "mysql_highlight",
+					Guidance:     "mysql_guidance",
+					Biz:          "ai",
+					BizId:        13,
+				})
 			},
 			req: web.SaveReq{
 				Case: web.Case{
@@ -681,6 +789,24 @@ func (s *AdminCaseHandlerTestSuite) TestPublish() {
 	}
 }
 
+func (s *AdminCaseHandlerTestSuite) cacheAssertCase(ca domain.Case) {
+	t := s.T()
+	key := fmt.Sprintf("cases:publish:%d", ca.Id)
+	val := s.rdb.Get(context.Background(), key)
+	require.NoError(t, val.Err)
+	valStr, err := val.String()
+	require.NoError(t, err)
+	actualCa := domain.Case{}
+	json.Unmarshal([]byte(valStr), &actualCa)
+	require.True(t, actualCa.Ctime.Unix() > 0)
+	require.True(t, actualCa.Utime.Unix() > 0)
+	ca.Ctime = actualCa.Ctime
+	ca.Utime = actualCa.Utime
+	assert.Equal(t, ca, actualCa)
+	_, err = s.rdb.Delete(context.Background(), key)
+	require.NoError(t, err)
+}
+
 func (s *AdminCaseHandlerTestSuite) TestEvent() {
 	t := s.T()
 	var evt event.Case
@@ -696,6 +822,34 @@ func (s *AdminCaseHandlerTestSuite) TestEvent() {
 		wg.Done()
 		return nil
 	}).Times(1)
+	s.knowledgeBaseProducer.EXPECT().Produce(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, baseEvent event.KnowledgeBaseEvent) error {
+		var ca domain.Case
+		err := json.Unmarshal(baseEvent.Data, &ca)
+		require.NoError(t, err)
+		assert.Equal(t, domain.BizCase, baseEvent.Biz)
+		assert.Equal(t, baseEvent.BizID, ca.Id)
+		assert.Equal(t, fmt.Sprintf("case_%d", ca.Id), baseEvent.Name)
+		ca.Ctime = time.UnixMilli(123)
+		ca.Utime = time.UnixMilli(123)
+		assert.Equal(t, domain.Case{
+			Id:         baseEvent.BizID,
+			Title:      "案例2",
+			Uid:        uid,
+			Content:    "案例2内容",
+			Labels:     []string{"MySQL"},
+			GithubRepo: "www.github.com",
+			GiteeRepo:  "www.gitee.com",
+			Keywords:   "mysql_keywords",
+			Shorthand:  "mysql_shorthand",
+			Highlight:  "mysql_highlight",
+			Guidance:   "mysql_guidance",
+			Status:     2,
+			Biz:        "bbb",
+			Ctime:      time.UnixMilli(123),
+			Utime:      time.UnixMilli(123),
+		}, ca)
+		return nil
+	})
 	// 发布
 	publishReq := web.SaveReq{
 		Case: web.Case{
@@ -708,6 +862,7 @@ func (s *AdminCaseHandlerTestSuite) TestEvent() {
 			Shorthand:  "mysql_shorthand",
 			Highlight:  "mysql_highlight",
 			Guidance:   "mysql_guidance",
+			Biz:        "bbb",
 		},
 	}
 	req2, err := http.NewRequest(http.MethodPost,
@@ -737,6 +892,7 @@ func (s *AdminCaseHandlerTestSuite) TestEvent() {
 		Guidance:   "mysql_guidance",
 		Status:     2,
 	}, evt)
+	time.Sleep(3 * time.Second)
 }
 
 // assertCase 不比较 id
@@ -752,4 +908,26 @@ func (s *AdminCaseHandlerTestSuite) assertCase(t *testing.T, expect dao.Case, ca
 
 func TestAdminCaseHandler(t *testing.T) {
 	suite.Run(t, new(AdminCaseHandlerTestSuite))
+}
+
+func (s *AdminCaseHandlerTestSuite) cacheAssertCaseList(biz string, cases []domain.Case) {
+	key := fmt.Sprintf("cases:list:%s", biz)
+	val := s.rdb.Get(context.Background(), key)
+	require.NoError(s.T(), val.Err)
+
+	var cs []domain.Case
+	err := json.Unmarshal([]byte(val.Val.(string)), &cs)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), len(cases), len(cs))
+	for idx, q := range cs {
+		require.True(s.T(), q.Utime.UnixMilli() > 0)
+		require.True(s.T(), q.Id > 0)
+		cs[idx].Id = cases[idx].Id
+		cs[idx].Utime = cases[idx].Utime
+		cs[idx].Ctime = cases[idx].Ctime
+
+	}
+	assert.Equal(s.T(), cases, cs)
+	_, err = s.rdb.Delete(context.Background(), key)
+	require.NoError(s.T(), err)
 }

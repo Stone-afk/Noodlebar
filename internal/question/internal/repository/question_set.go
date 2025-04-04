@@ -27,7 +27,10 @@ import (
 type QuestionSetRepository interface {
 	Create(ctx context.Context, set domain.QuestionSet) (int64, error)
 	UpdateQuestions(ctx context.Context, set domain.QuestionSet) error
+
 	GetByID(ctx context.Context, id int64) (domain.QuestionSet, error)
+	PubGetByID(ctx context.Context, id int64) (domain.QuestionSet, error)
+
 	Total(ctx context.Context) (int64, error)
 	List(ctx context.Context, offset int, limit int) ([]domain.QuestionSet, error)
 	UpdateNonZero(ctx context.Context, set domain.QuestionSet) error
@@ -35,6 +38,7 @@ type QuestionSetRepository interface {
 	GetByIDsWithQuestion(ctx context.Context, ids []int64) ([]domain.QuestionSet, error)
 	ListByBiz(ctx context.Context, offset, limit int, biz string) ([]domain.QuestionSet, error)
 	GetByBiz(ctx context.Context, biz string, bizId int64) (domain.QuestionSet, error)
+	CountByBiz(ctx context.Context, biz string) (int64, error)
 }
 
 var _ QuestionSetRepository = &questionSetRepository{}
@@ -44,6 +48,9 @@ type questionSetRepository struct {
 	logger *elog.Component
 }
 
+func (q *questionSetRepository) CountByBiz(ctx context.Context, biz string) (int64, error) {
+	return q.dao.CountByBiz(ctx, biz)
+}
 func (q *questionSetRepository) GetByIDsWithQuestion(ctx context.Context, ids []int64) ([]domain.QuestionSet, error) {
 	qsets, questionMap, err := q.dao.GetByIDsWithQuestions(ctx, ids)
 	if err != nil {
@@ -133,6 +140,16 @@ func (q *questionSetRepository) UpdateQuestions(ctx context.Context, set domain.
 	return q.dao.UpdateQuestionsByID(ctx, set.Id, qids)
 }
 
+func (q *questionSetRepository) getPubDomainQuestions(ctx context.Context, id int64) ([]domain.Question, error) {
+	questions, err := q.dao.GetPubQuestionsByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map(questions, func(idx int, src dao.PublishQuestion) domain.Question {
+		return q.toDomainQuestion(dao.Question(src))
+	}), err
+}
+
 func (q *questionSetRepository) getDomainQuestions(ctx context.Context, id int64) ([]domain.Question, error) {
 	questions, err := q.dao.GetQuestionsByID(ctx, id)
 	if err != nil {
@@ -148,6 +165,7 @@ func (q *questionSetRepository) toDomainQuestion(que dao.Question) domain.Questi
 		Id:      que.Id,
 		Uid:     que.Uid,
 		Title:   que.Title,
+		Labels:  que.Labels.Val,
 		Content: que.Content,
 		Biz:     que.Biz,
 		BizId:   que.BizId,
@@ -162,6 +180,28 @@ func (q *questionSetRepository) GetByID(ctx context.Context, id int64) (domain.Q
 		return domain.QuestionSet{}, err
 	}
 	questions, err := q.getDomainQuestions(ctx, id)
+	if err != nil {
+		return domain.QuestionSet{}, err
+	}
+
+	return domain.QuestionSet{
+		Id:          set.Id,
+		Uid:         set.Uid,
+		Title:       set.Title,
+		Biz:         set.Biz,
+		BizId:       set.BizId,
+		Description: set.Description,
+		Questions:   questions,
+		Utime:       time.UnixMilli(set.Utime),
+	}, nil
+}
+
+func (q *questionSetRepository) PubGetByID(ctx context.Context, id int64) (domain.QuestionSet, error) {
+	set, err := q.dao.GetByID(ctx, id)
+	if err != nil {
+		return domain.QuestionSet{}, err
+	}
+	questions, err := q.getPubDomainQuestions(ctx, id)
 	if err != nil {
 		return domain.QuestionSet{}, err
 	}

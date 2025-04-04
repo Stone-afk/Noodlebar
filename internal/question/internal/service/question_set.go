@@ -35,12 +35,14 @@ type QuestionSetService interface {
 	Save(ctx context.Context, set domain.QuestionSet) (int64, error)
 	UpdateQuestions(ctx context.Context, set domain.QuestionSet) error
 	List(ctx context.Context, offset, limit int) ([]domain.QuestionSet, int64, error)
-	ListDefault(ctx context.Context, offset, limit int) ([]domain.QuestionSet, error)
+	ListDefault(ctx context.Context, offset, limit int) ([]domain.QuestionSet, int64, error)
 	Detail(ctx context.Context, id int64) (domain.QuestionSet, error)
 	GetByIds(ctx context.Context, ids []int64) ([]domain.QuestionSet, error)
 	DetailByBiz(ctx context.Context, biz string, bizId int64) (domain.QuestionSet, error)
 	GetCandidates(ctx context.Context, id int64, offset int, limit int) ([]domain.Question, int64, error)
 	GetByIDsWithQuestion(ctx context.Context, ids []int64) ([]domain.QuestionSet, error)
+
+	PubDetail(ctx context.Context, id int64) (domain.QuestionSet, error)
 }
 
 type questionSetService struct {
@@ -75,8 +77,24 @@ func (q *questionSetService) DetailByBiz(ctx context.Context, biz string, bizId 
 	return q.repo.GetByBiz(ctx, biz, bizId)
 }
 
-func (q *questionSetService) ListDefault(ctx context.Context, offset, limit int) ([]domain.QuestionSet, error) {
-	return q.repo.ListByBiz(ctx, offset, limit, domain.DefaultBiz)
+func (q *questionSetService) ListDefault(ctx context.Context, offset, limit int) ([]domain.QuestionSet, int64, error) {
+	var (
+		eg    errgroup.Group
+		qs    []domain.QuestionSet
+		total int64
+	)
+	eg.Go(func() error {
+		var err error
+		qs, err = q.repo.ListByBiz(ctx, offset, limit, domain.DefaultBiz)
+		return err
+	})
+	eg.Go(func() error {
+		var err error
+		total, err = q.repo.CountByBiz(ctx, domain.DefaultBiz)
+		return err
+	})
+	return qs, total, eg.Wait()
+
 }
 
 func (q *questionSetService) GetByIds(ctx context.Context, ids []int64) ([]domain.QuestionSet, error) {
@@ -109,6 +127,22 @@ func (q *questionSetService) UpdateQuestions(ctx context.Context, set domain.Que
 
 func (q *questionSetService) Detail(ctx context.Context, id int64) (domain.QuestionSet, error) {
 	qs, err := q.repo.GetByID(ctx, id)
+	if err == nil {
+		// 没有区分 B 端还是 C 端，但是这种计数不需要精确计算
+		go func() {
+			newCtx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+			defer cancel()
+			err1 := q.intrProducer.Produce(newCtx, event.NewViewCntEvent(id, domain.QuestionSetBiz))
+			if err1 != nil {
+				q.logger.Error("发送阅读计数消息到消息队列失败", elog.FieldErr(err1), elog.Int64("qsid", id))
+			}
+		}()
+	}
+	return qs, err
+}
+
+func (q *questionSetService) PubDetail(ctx context.Context, id int64) (domain.QuestionSet, error) {
+	qs, err := q.repo.PubGetByID(ctx, id)
 	if err == nil {
 		// 没有区分 B 端还是 C 端，但是这种计数不需要精确计算
 		go func() {

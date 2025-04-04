@@ -5,6 +5,7 @@
 //
 //	mockgen -source=./type.go -destination=./mocks/handler.mock.go -package=hdlmocks -typed=true Handler
 //
+
 // Package hdlmocks is a generated GoMock package.
 package hdlmocks
 
@@ -21,6 +22,7 @@ import (
 type MockHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockHandlerMockRecorder is the mock recorder for MockHandler.
@@ -50,31 +52,31 @@ func (m *MockHandler) Handle(ctx context.Context, req domain.LLMRequest) (domain
 }
 
 // Handle indicates an expected call of Handle.
-func (mr *MockHandlerMockRecorder) Handle(ctx, req any) *HandlerHandleCall {
+func (mr *MockHandlerMockRecorder) Handle(ctx, req any) *MockHandlerHandleCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Handle", reflect.TypeOf((*MockHandler)(nil).Handle), ctx, req)
-	return &HandlerHandleCall{Call: call}
+	return &MockHandlerHandleCall{Call: call}
 }
 
-// HandlerHandleCall wrap *gomock.Call
-type HandlerHandleCall struct {
+// MockHandlerHandleCall wrap *gomock.Call
+type MockHandlerHandleCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *HandlerHandleCall) Return(arg0 domain.LLMResponse, arg1 error) *HandlerHandleCall {
+func (c *MockHandlerHandleCall) Return(arg0 domain.LLMResponse, arg1 error) *MockHandlerHandleCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *HandlerHandleCall) Do(f func(context.Context, domain.LLMRequest) (domain.LLMResponse, error)) *HandlerHandleCall {
+func (c *MockHandlerHandleCall) Do(f func(context.Context, domain.LLMRequest) (domain.LLMResponse, error)) *MockHandlerHandleCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *HandlerHandleCall) DoAndReturn(f func(context.Context, domain.LLMRequest) (domain.LLMResponse, error)) *HandlerHandleCall {
+func (c *MockHandlerHandleCall) DoAndReturn(f func(context.Context, domain.LLMRequest) (domain.LLMResponse, error)) *MockHandlerHandleCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -83,6 +85,7 @@ func (c *HandlerHandleCall) DoAndReturn(f func(context.Context, domain.LLMReques
 type MockBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MockBuilderMockRecorder
+	isgomock struct{}
 }
 
 // MockBuilderMockRecorder is the mock recorder for MockBuilder.
@@ -111,31 +114,94 @@ func (m *MockBuilder) Next(next handler.Handler) handler.Handler {
 }
 
 // Next indicates an expected call of Next.
-func (mr *MockBuilderMockRecorder) Next(next any) *BuilderNextCall {
+func (mr *MockBuilderMockRecorder) Next(next any) *MockBuilderNextCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockBuilder)(nil).Next), next)
-	return &BuilderNextCall{Call: call}
+	return &MockBuilderNextCall{Call: call}
 }
 
-// BuilderNextCall wrap *gomock.Call
-type BuilderNextCall struct {
+// MockBuilderNextCall wrap *gomock.Call
+type MockBuilderNextCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *BuilderNextCall) Return(arg0 handler.Handler) *BuilderNextCall {
+func (c *MockBuilderNextCall) Return(arg0 handler.Handler) *MockBuilderNextCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *BuilderNextCall) Do(f func(handler.Handler) handler.Handler) *BuilderNextCall {
+func (c *MockBuilderNextCall) Do(f func(handler.Handler) handler.Handler) *MockBuilderNextCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *BuilderNextCall) DoAndReturn(f func(handler.Handler) handler.Handler) *BuilderNextCall {
+func (c *MockBuilderNextCall) DoAndReturn(f func(handler.Handler) handler.Handler) *MockBuilderNextCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockStreamHandler is a mock of StreamHandler interface.
+type MockStreamHandler struct {
+	ctrl     *gomock.Controller
+	recorder *MockStreamHandlerMockRecorder
+	isgomock struct{}
+}
+
+// MockStreamHandlerMockRecorder is the mock recorder for MockStreamHandler.
+type MockStreamHandlerMockRecorder struct {
+	mock *MockStreamHandler
+}
+
+// NewMockStreamHandler creates a new mock instance.
+func NewMockStreamHandler(ctrl *gomock.Controller) *MockStreamHandler {
+	mock := &MockStreamHandler{ctrl: ctrl}
+	mock.recorder = &MockStreamHandlerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockStreamHandler) EXPECT() *MockStreamHandlerMockRecorder {
+	return m.recorder
+}
+
+// StreamHandle mocks base method.
+func (m *MockStreamHandler) StreamHandle(ctx context.Context, req domain.LLMRequest) (chan domain.StreamEvent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StreamHandle", ctx, req)
+	ret0, _ := ret[0].(chan domain.StreamEvent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StreamHandle indicates an expected call of StreamHandle.
+func (mr *MockStreamHandlerMockRecorder) StreamHandle(ctx, req any) *MockStreamHandlerStreamHandleCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamHandle", reflect.TypeOf((*MockStreamHandler)(nil).StreamHandle), ctx, req)
+	return &MockStreamHandlerStreamHandleCall{Call: call}
+}
+
+// MockStreamHandlerStreamHandleCall wrap *gomock.Call
+type MockStreamHandlerStreamHandleCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStreamHandlerStreamHandleCall) Return(arg0 chan domain.StreamEvent, arg1 error) *MockStreamHandlerStreamHandleCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStreamHandlerStreamHandleCall) Do(f func(context.Context, domain.LLMRequest) (chan domain.StreamEvent, error)) *MockStreamHandlerStreamHandleCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStreamHandlerStreamHandleCall) DoAndReturn(f func(context.Context, domain.LLMRequest) (chan domain.StreamEvent, error)) *MockStreamHandlerStreamHandleCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
